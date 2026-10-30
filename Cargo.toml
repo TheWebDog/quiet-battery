@@ -1,6 +1,6 @@
 [package]
 name = "quiet-battery"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Native Windows peripheral battery monitor with extensible protocol adapters"

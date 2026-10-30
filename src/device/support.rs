@@ -104,6 +104,8 @@ fn matching(collections: &[Collection]) -> String {
         &super::rog_pelta::ADAPTER,
         &super::razer_headset::ADAPTER,
         &super::aula::ADAPTER,
+        &super::ajazz::ADAPTER,
+        &super::xiaomi::ADAPTER,
     ] {
         let known: Vec<_> = collections
             .iter()
@@ -361,11 +363,13 @@ mod tests {
     }
     #[test]
     fn issue_adapters_are_reported_without_querying_any_vendor_protocol() {
-        for (adapter, vid, pid, page, usage, length, interface) in [
-            ("rog-pelta", 0x0b05, 0x1b84, 0xff00, 1, 64, 3),
-            ("razer-headset", 0x1532, 0x0555, 0xff00, 1, 64, 3),
-            ("aula", 0x0c45, 0xfefe, 0xff60, 0x61, 33, 0),
-            ("razer", 0x1532, 0x009c, 1, 2, 0, 0),
+        for (adapter, vid, pid, page, usage, length, feature, interface) in [
+            ("rog-pelta", 0x0b05, 0x1b84, 0xff00, 1, 64, 91, 3),
+            ("razer-headset", 0x1532, 0x0555, 0xff00, 1, 64, 91, 3),
+            ("aula", 0x0c45, 0xfefe, 0xff60, 0x61, 33, 91, 0),
+            ("razer", 0x1532, 0x009c, 1, 2, 0, 91, 0),
+            ("ajazz", 0x0c45, 0xfefc, 0xff80, 1, 33, 0, 2),
+            ("xiaomi", 0x2717, 0x5111, 0xffef, 0, 64, 64, 3),
         ] {
             let mut c = Collection::default();
             for (k, v) in [
@@ -376,7 +380,7 @@ mod tests {
                 ("interface", interface),
                 ("input_report_bytes", length),
                 ("output_report_bytes", length),
-                ("feature_report_bytes", 91),
+                ("feature_report_bytes", feature),
             ] {
                 c.fields.insert(k, Field::number(v, "fixture"));
             }

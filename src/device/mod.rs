@@ -1,4 +1,5 @@
 //! Read-only protocol adapters and common, device-independent battery values.
+mod ajazz;
 mod aula;
 mod bas;
 mod compx;
@@ -13,6 +14,7 @@ mod razer_headset;
 mod rog_pelta;
 pub mod support;
 mod vendor_hid;
+mod xiaomi;
 use std::{
     fmt,
     sync::{
@@ -283,6 +285,8 @@ static ADAPTERS: &[&dyn ProtocolAdapter] = &[
     &rog_pelta::ADAPTER,
     &razer_headset::ADAPTER,
     &aula::ADAPTER,
+    &ajazz::ADAPTER,
+    &xiaomi::ADAPTER,
 ];
 pub struct Registry;
 impl Registry {

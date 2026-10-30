@@ -203,14 +203,14 @@ mod tests {
         let io = Script::new(vec![
             Step::Set(request(0x80).to_vec()),
             Step::Pause,
-            Step::Get(reply(0x84, 1, 2)),
+            Step::Get(0, 91, reply(0x84, 1, 2)),
             Step::Pause,
-            Step::Get(reply(0x80, 0, 1)),
+            Step::Get(0, 91, reply(0x80, 0, 1)),
             Step::Pause,
-            Step::Get(reply(0x80, 171, 2)),
+            Step::Get(0, 91, reply(0x80, 171, 2)),
             Step::Set(request(0x84).to_vec()),
             Step::Pause,
-            Step::Get(reply(0x84, 1, 2)),
+            Step::Get(0, 91, reply(0x84, 1, 2)),
         ]);
         let r = query(profile(), &io, &Cancellation::default()).unwrap();
         io.done();
@@ -224,7 +224,7 @@ mod tests {
         let io = Script::new(vec![
             Step::Set(request(0x80).to_vec()),
             Step::Pause,
-            Step::Get(reply(0x80, 0, 2)),
+            Step::Get(0, 91, reply(0x80, 0, 2)),
             Step::Set(request(0x84).to_vec()),
             Step::Pause,
             Step::Failure,
@@ -254,7 +254,7 @@ mod tests {
         let io = Script::new(vec![
             Step::Set(request(0x80).to_vec()),
             Step::Pause,
-            Step::Get(short.clone()),
+            Step::Get(0, 91, short.clone()),
         ]);
         let r = query(p, &io, &Cancellation::default()).unwrap();
         io.done();
@@ -272,7 +272,7 @@ mod tests {
     fn endless_foreign_stream_is_bounded_and_cannot_become_success() {
         let mut steps = vec![Step::Set(request(0x80).to_vec())];
         for _ in 0..24 {
-            steps.extend([Step::Pause, Step::Get(reply(0x84, 255, 2))]);
+            steps.extend([Step::Pause, Step::Get(0, 91, reply(0x84, 255, 2))]);
         }
         let io = Script::new(steps);
         assert!(query(profile(), &io, &Cancellation::default()).is_err());

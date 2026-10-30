@@ -18,6 +18,7 @@
 - `src/device/compx.rs` / `razer.rs`：本次新增协议与静态profile，先看[设备支持表](DEVICE-SUPPORT.md)的精确ID、控制集合和固定来源版本。同协议新型号通常补MODELS条目；不同接口、report长度、事务ID或充电字段须补规则与测试，不只加名称。
 - `src/device/vendor_hid.rs`：共用原生事务桥与发现，两个模块直接复用；`Transport`可用模拟脚本测试完整查询；Adapter.kind决定通用设备类型，只有鼠标默认选中；共享OEM身份未确认时填写unconfirmed_name，不提前显示零售品牌/型号。
 - `src/device/rog_pelta.rs` / `razer_headset.rs` / `aula.rs`：新厂商报文也复用vendor_hid；通过Adapter.kind明确设备类型。Transport.exchange支持“先挂读取再发包”，control=true仅用于已确认需要控制输出的PELTA。增加profile时要核对充电含义、接收器关机回复与真实型号信息，不按共享USB ID认品牌。Report长度含Windows报告号；不同命令、AULA分块地址/长度必须匹配。
+- `src/device/ajazz.rs` / `xiaomi.rs`：AJAZZ网页驱动的分块设备信息和小米G-HUB的64字节Feature电量；前者仍校验返回型号与2.4G模式，后者由小米自己的接收器ID和0xFFEF集合选择。网页驱动只作静态资料核对，不作为运行依赖。
 - `src/device/darmoshark.rs`：已验证 N3 的旧版 Feature 协议；原生有界传输在 `hid_io.rs`。相同品牌或类似 VID/PID 不足以复用该协议。
 - `src/device/delux.rs`：多彩Beken被动状态，先核对接收器与000A:0000集合，再按MODELS中的型号码/事件识别。共用接收器不按名称猜品牌；同协议补Model和原始样本/事件依据，其他主控新建协议。无帧不造读数，不向普通输入集合或未知Feature发命令；范围见设备支持表。
 - `src/device/discovery.rs`：公共HID候选与Windows ContainerId分组，排除适配器已认领的物理设备；新品牌不要复制公共枚举。

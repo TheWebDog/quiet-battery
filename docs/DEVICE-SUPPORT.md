@@ -1,6 +1,6 @@
 # 设备支持与协议依据
 
-本表以v0.5.0为基线，区分**本项目真机通过**和**已实现、待真机确认**。后者已内置发现、查询、解析和测试，可直接下载尝试，不是仅登记型号；但公开资料和模拟事务不能证明特定固件、接收器或Windows驱动一定可用。
+本表包含v0.6.0候选适配，稳定版仍为v0.5.0，区分**本项目真机通过**和**已实现、待真机确认**。后者已内置发现、查询、解析和测试，可直接下载尝试，不是仅登记型号；但公开资料和模拟事务不能证明特定固件、接收器或Windows驱动一定可用。
 
 下文VID/PID和报文字节均用十六进制，偏移从0开始；百分比仍用十进制。
 
@@ -10,6 +10,8 @@
 |---|---|---|
 | Logitech G304 | 046D:C53F接收器；HID++ 4.2 / 1000，曾真实取得90% | 其他接收器/型号、真实充电、实体拔插等不能沿用结论 |
 | Darmoshark N3 | 248A:FF30接收器配对248A:FF10，历史真实9% | 非零充电字段含义尚未实现；同型号换配对身份限制 |
+| AJAZZ AK820 MAX | 0C45:FEFC 2.4G接收器，FF80:0001 33字节设备信息，贡献者原版32–33%、审查修正版80%（2026-10-30） | 充电含义、休眠唤醒、拔插、厂商页面并发、其他AJAZZ型号 |
+| 小米电竞鼠标 2 | 2717:5111 2.4G接收器，FFEF:0000 64字节Feature，贡献者原版27%、审查修正版20%（2026-10-30） | 充电、有线0x5110、休眠唤醒、拔插、其他小米鼠标 |
 | 广播名BT5.0 KB的BLE设备 | 标准180F / 2A19，历史真实100%；未确认零售型号 | 变化订阅、可选充电、断开重连 |
 
 以上是各版本历史记录，不代表最新版已对全部场景重复实测；本次结果见[验证记录](VALIDATION.md)。
@@ -84,6 +86,37 @@ AULA共享接收器ID不能证明型号，必须校验返回的设备VID/PID与2
 - [Ferris Pulse耳机协议](https://github.com/Ferris-echo/FerrisPulse/blob/b1a730bfa783f5833cda7435b6e7d5a2f2d4961f/src/Hardware/RazerHeadsetHelper.cs)：64字节报文及连接/充电命令。仅查协议事实，不复制GPL实现或其设备控制功能。
 - [OpenAula协议](https://github.com/cvanelteren/OpenAula/blob/fc3a9200bffd62ac91ca3bf5b3aac56a906a530a/docs/PROTOCOL.md)：SDK重建的报文头、分块地址、设备信息布局和只读命令。
 - [Microsoft控制输出](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/hidclass/ni-hidclass-ioctl_hid_set_output_report)：输入缓冲含report-ID；完成时不要求输出字节数。
+
+### v0.6.0候选：AJAZZ AK820 MAX 与小米电竞鼠标 2（贡献者报告）
+
+两款来自[PR #3](https://github.com/TheWebDog/quiet-battery/pull/3)贡献者导出的 `selected-device-support` 报告，协议依据为各自官方网页驱动。驱动包只做静态 JS 核对，未在浏览器中运行，也未导入其代码或网页运行时。下表偏移从0开始，报文和USB标识用十六进制。
+
+**AJAZZ AK820 MAX**
+
+- 接收器 `0C45:FEFC`，产品串 `AJAZZ AK820MAX`；只访问MI02的 `FF80:0001` 集合，Input/Output均33字节（含Windows report-ID槽位），report ID 0。
+- 只读 `GET_DEVICE_INFO(0x10)`：零report-ID后的32字节包为 `AA 10 18 <addr LE16> 00 <last> 00`，按地址0和24各取24字节；回复须以 `55 10 18 <addr LE16>` 开头，Windows report-ID必须为0，声明长度必须24，分块地址严格匹配；地址0不能代表缺失地址。贡献者2026-10-30在审查修正版回测确认硬件第二块确实回显24，两块原始头已作为脱敏夹具。
+- 设备信息：byte4/5 为设备VID、byte6/7 为设备PID、byte16 为工作模式、byte17 为百分比、byte18 为充电原值。只有VID=0C45、PID=80A0且工作模式=2才认领AK820 MAX；贡献者原版32–33%、审查修正版80%。
+- 键盘休眠时接收器仍枚举，并可能用 `55 FC 04` 报告2.4G断开；此时取不到设备信息，不产生新读数，已有成功值按缓存规则保留；首次失败保留通用名称，已有成功值遇超时继续保留；完整有效设备信息明确返回其他VID/PID或非2.4G模式时，旧逻辑设备隐藏但保留偏好/缓存。相同型号换配对仍缺独立unit ID。充电byte18含义未确认，保留Unknown，不显示闪电。
+- 未覆盖：其他AJAZZ型号/接收器、有线或蓝牙通道、充电、实体休眠唤醒、拔插和厂商页面并发。
+
+**小米电竞鼠标 2**
+
+- 接收器 `2717:5111`，产品串 `Mi Gaming Mouse 2 Receiver`；只访问MI03的 `FFEF:0000` 集合，Input/Output/Feature均64字节（含report-ID槽位）。
+- 只读电量：Feature report 5，载荷首字节为选择符1（0x5111接收器）、第二字节 `16`；等待约100ms后读取Feature report 5。贡献者原版回复为 `05 01 16 03 01 1B …`（Windows缓冲含report ID），byte5为百分比；原版27%、审查修正版20%。
+- 官方G-HUB的M002路径使用同一Feature查询；0x5110有线/直连变体使用选择符0，本次未接入，不能只按相同命令扩大。电量回复还要求byte3为已记录的3字节数据长度，拒绝请求回显/空数据；不将byte4硬猜为成功或充电标志。充电未确认，返回Unknown(255)。
+- 未覆盖：有线0x5110、标准报告路径、充电、实体休眠唤醒、拔插和其他小米鼠标。
+
+资料：
+
+- [AJAZZ网页驱动](https://ajazz.driveall.cn/)：`3141-65276-AJAZZ AK820MAX` 配置、命令16和24字节分块。2026-10-28静态核对。
+- [小米G-HUB Beta](https://web.mieco.net/yuemi--manual/mouse/h/p/index.html)：设备筛选 `10007/20753/0xFFEF/usage 0`、M002 Feature 5与选择符1。2026-10-29静态核对。
+
+维护者2026-10-29仅静态复核以下固定资源，未运行网页、安装厂商程序或提交其源码：
+
+- AJAZZ `layout-classic-CMxiG14P.js`，SHA256=`6c02a3e2a333b70f0fe75ec5bfaa68dec2a242c1e6e801d1c545ff6f7759fa5a`；`GX`设备信息48字节、`NX/PX/FX`分块、报告0和24字节有效负载；SDK默认不强制地址校验，严格地址兼容已由贡献者2026-10-30两块真实回复确认。[资源](https://ajazz.driveall.cn/assets/layout-classic-CMxiG14P.js)
+- 小米 `index-BbzxWOJP.js`，SHA256=`a93a4b1af62c120faa9a64b1cd67bbae3b6d723b36d5acf830f5bc6e210473f6`；`W3/G3/Sf`确认选择符1、Feature 5、100ms及byte5电量；`processStandardReport`取4–6的三字节数据。`03 01`中byte4的完整语义未在本轮确认，不据此实现充电。[资源](https://cdn.mieco.net/yuemi--manual/mouse/static/assets/index-BbzxWOJP.js)
+
+贡献者已于2026-10-30在审查修正版回测两款并提供脱敏原始回复夹具：AJAZZ两块头 `00 55 10 18`、第二块 `addr=24/last=1`，小米 `05 01 16 03 01 14 15…`（20%）。充电、断电/休眠/唤醒、未就绪回复与0%实机边界、同类多台仍待回测；维护者本机仍无这两款硬件。
 
 ### 多彩 DELUX：Beken五字节主动上报
 

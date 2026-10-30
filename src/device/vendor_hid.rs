@@ -160,6 +160,17 @@ impl Adapter {
             error,
         })
     }
+    fn discovery_candidate(
+        &self,
+        p: Profile,
+        key: &str,
+        result: Result<Reading, DeviceError>,
+    ) -> Result<Option<Candidate>, DeviceError> {
+        match result {
+            Err(DeviceError::NotFound) => Ok(None),
+            result => self.candidate(p, key, result).map(Some),
+        }
+    }
     fn inventory(&self, cancel: &Cancellation) -> Result<Vec<Collection>, DeviceError> {
         let inventory = diagnostics::inventory(cancel)?;
         if !inventory.is_complete() {
@@ -201,6 +212,7 @@ impl Adapter {
             })();
             match result {
                 Ok(reading) => return Ok(reading),
+                Err(DeviceError::NotFound) => return Err(DeviceError::NotFound),
                 Err(DeviceError::Cancelled) => return Err(DeviceError::Cancelled),
                 Err(e) => error = e,
             }
@@ -243,11 +255,11 @@ impl ProtocolAdapter for Adapter {
                 break;
             }
             endpoints.sort_by(|a, b| a.path.cmp(&b.path));
-            report.candidates.push(self.candidate(
-                p,
-                &key,
-                self.query_endpoints(p, &endpoints, cancel),
-            )?);
+            if let Some(candidate) =
+                self.discovery_candidate(p, &key, self.query_endpoints(p, &endpoints, cancel))?
+            {
+                report.candidates.push(candidate);
+            }
         }
         cancel.check()?;
         Ok(report)
@@ -290,7 +302,7 @@ pub(super) mod tests {
         Exchange(Vec<u8>, bool, Option<Vec<u8>>),
         Input(Option<Vec<u8>>),
         Set(Vec<u8>),
-        Get(Vec<u8>),
+        Get(u8, usize, Vec<u8>),
         Failure,
         Pause,
         Drain,
@@ -360,13 +372,17 @@ pub(super) mod tests {
                     assert_eq!(report, expected);
                     Ok(())
                 }
+                Step::Failure => Err(DeviceError::Io("injected feature failure".into())),
                 _ => panic!("expected set feature"),
             }
         }
         fn get_feature(&self, id: u8, length: usize) -> Result<Vec<u8>, DeviceError> {
-            assert_eq!((id, length), (0, 91));
             match self.next() {
-                Step::Get(value) => Ok(value),
+                Step::Get(expected_id, expected_length, value) => {
+                    assert_eq!((id, length), (expected_id, expected_length));
+                    assert!(value.len() <= length);
+                    Ok(value)
+                }
                 Step::Failure => Err(DeviceError::Io("injected feature failure".into())),
                 _ => panic!("expected get feature"),
             }
@@ -522,6 +538,60 @@ pub(super) mod tests {
         assert!(!failed.descriptor.supported && failed.reading.is_none());
         assert!(!failed.descriptor.name.contains("AULA"));
     }
+
+    #[test]
+    fn confirmed_model_change_hides_old_target_while_sleep_keeps_it() {
+        use super::super::{PowerState, ajazz};
+        let a = &ajazz::ADAPTER;
+        let p = (a.identify)(&collection(0x0c45, 0xfefc, "receiver-a")).unwrap();
+        let success = |key: &str, n| {
+            a.candidate(
+                p,
+                key,
+                Reading::from_percent(p.name.into(), n, PowerState::Unknown(255)),
+            )
+            .unwrap()
+        };
+        let mut m = crate::manager::Manager::default();
+        m.merge(vec![success("a", 33), success("b", 80)], 100);
+        let id = m.devices[0].descriptor.id.clone();
+        m.devices[0].selected = true;
+        let asleep = a
+            .discovery_candidate(p, "a", Err(DeviceError::Unavailable("asleep".into())))
+            .unwrap()
+            .unwrap();
+        m.merge(vec![asleep, success("b", 79)], 200);
+        let state = m.devices.iter().find(|s| s.descriptor.id == id).unwrap();
+        assert!(state.connected);
+        assert_eq!(state.last_success, Some(100));
+        assert!(
+            a.discovery_candidate(p, "a", Err(DeviceError::NotFound))
+                .unwrap()
+                .is_none()
+        );
+        m.merge(vec![success("b", 78)], 300);
+        let state = m.devices.iter().find(|s| s.descriptor.id == id).unwrap();
+        assert!(!state.connected && state.selected);
+        assert_eq!(state.last_success, Some(100));
+        assert_eq!(state.reading.as_ref().unwrap().normalized_percent(), 33);
+        m.merge(vec![success("a", 32), success("b", 78)], 400);
+        let state = m.devices.iter().find(|s| s.descriptor.id == id).unwrap();
+        assert!(state.connected && state.selected);
+        assert_eq!(state.last_success, Some(400));
+    }
+    #[test]
+    fn feature_script_rejects_wrong_report_id_and_length() {
+        for (id, length) in [(0, 64), (5, 91)] {
+            let io = Script::new(vec![Step::Get(5, 64, vec![0; 64])]);
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    || io.get_feature(id, length)
+                ))
+                .is_err()
+            );
+            io.done();
+        }
+    }
     #[test]
     fn cancellation_precedes_inventory_or_open() {
         let cancel = Cancellation::default();
@@ -532,6 +602,8 @@ pub(super) mod tests {
             &super::super::rog_pelta::ADAPTER,
             &super::super::razer_headset::ADAPTER,
             &super::super::aula::ADAPTER,
+            &super::super::ajazz::ADAPTER,
+            &super::super::xiaomi::ADAPTER,
         ] {
             assert!(matches!(a.discover(&cancel), Err(DeviceError::Cancelled)));
             assert!(matches!(

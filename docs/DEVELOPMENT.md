@@ -2,7 +2,7 @@
 
 ## 构建
 
-Windows x64、Rust stable、MSVC工具链与Windows SDK。当前验证工具链为Rust1.94.0。Cargo.lock锁定依赖，缓存留在 `.build/`。Windows文件/产品资源及manifest版本从Cargo包版本生成，升级不另改硬编码版本号。
+Windows x64、Rust stable、MSVC工具链与Windows SDK。维护者当前验证工具链为Rust1.94.0；PR #3贡献者报告使用1.99.1。Cargo.lock锁定依赖，缓存留在 `.build/`。Windows文件/产品资源及manifest版本从Cargo包版本生成，升级不另改硬编码版本号。
 
 ```powershell
 ./tools/build.ps1                # fmt、test、Clippy、release，复制到dist
